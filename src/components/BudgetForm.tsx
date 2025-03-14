@@ -1,15 +1,16 @@
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Mic, Loader2, Send, StopCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { FinancialAdvice } from '@/types';
 
 interface BudgetFormProps {
   isAuthenticated?: boolean;
   onSubmit: (budget: string, isVoice: boolean) => Promise<void>;
   loading: boolean;
-  adviceData?: any;
+  adviceData?: FinancialAdvice;
   onDownloadSpreadsheet?: () => void;
 }
 
@@ -22,85 +23,107 @@ const BudgetForm = ({
 }: BudgetFormProps) => {
   const [prompt, setPrompt] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [transcript, setTranscript] = useState('');
   const { toast } = useToast();
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const handleStartRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      
-      const audioChunks: BlobPart[] = [];
-      
-      mediaRecorder.addEventListener('dataavailable', (event) => {
-        audioChunks.push(event.data);
-      });
-      
-      mediaRecorder.addEventListener('stop', () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        
-        // Here you would normally send the audio to a speech-to-text service
-        // For demo purposes, we'll just set a placeholder transcript
-        setTimeout(() => {
-          const demoTranscript = "I earn $5,000 monthly with fixed expenses of $2,000 for rent and utilities. I spend about $800 on groceries, $400 on transportation, and $300 on entertainment. I'm looking to save for a vacation and retirement.";
-          setTranscript(demoTranscript);
-          setPrompt(demoTranscript);
-          toast({
-            title: "Voice captured!",
-            description: "Your voice input has been transcribed. Review and submit."
-          });
-        }, 1500);
-        
-        // Release the microphone
-        stream.getTracks().forEach(track => track.stop());
-      });
-      
-      mediaRecorder.start();
-      setIsRecording(true);
-      
-      toast({
-        title: "Recording started",
-        description: "Speak clearly about your income, expenses, and financial goals."
-      });
-      
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      toast({
-        title: "Microphone access denied",
-        description: "Please allow microphone access to use voice input.",
-        variant: "destructive"
-      });
-    }
-  };
+  useEffect(() => {
+    // Initialize SpeechRecognition
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            setPrompt((prev) => prev + transcript);
+            setTimeout(handleSubmit, 1000);
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        toast({
+          title: 'Speech Recognition Error',
+          description: event.error,
+          variant: 'destructive',
+        });
+        setIsRecording(false);
+      };
+
+      recognition.onspeechend = () => {
+        handleStopRecording();
+      };
   
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+      // recognition.onend = () => {
+      //   setIsRecording(false);
+      //   toast({
+      //     title: 'Recording stopped',
+      //     description: 'Processing your input...',
+      //   });
+      // };
+
+      recognitionRef.current = recognition;
+    } else {
+      toast({
+        title: 'Speech Recognition Not Supported',
+        description: 'Your browser does not support speech recognition.',
+        variant: 'destructive',
+      });
+    }
+  }, []);
+
+  const handleStartRecording = () => {
+    if (recognitionRef.current) {
+      setPrompt('');
+      recognitionRef.current.start();
+      setIsRecording(true);
+      toast({
+        title: 'Recording started',
+        description:
+          'Speak clearly about your income, expenses, and financial goals.',
+      });
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleStopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      toast({
+        title: 'Recording stopped',
+        description: 'Your voice input is being processed.',
+      });
+    }
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!prompt.trim()) {
       toast({
-        title: "Input required",
-        description: "Please describe your financial situation.",
-        variant: "destructive"
+        title: 'Input required',
+        description: 'Please describe your financial situation.',
+        variant: 'destructive',
       });
       return;
     }
-    
+
     try {
-      await onSubmit(prompt, !!transcript);
+      await onSubmit(prompt, isRecording);
     } catch (error) {
       console.error('Error submitting budget:', error);
       toast({
-        title: "Error",
-        description: "Failed to process your budget. Please try again.",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to process your budget. Please try again.',
+        variant: 'destructive',
       });
     }
   };
@@ -168,18 +191,32 @@ const BudgetForm = ({
           <div className="mt-8 space-y-4 animate-fadeIn">
             <div className="p-6 rounded-lg bg-white shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold mb-3">Financial Advice</h3>
-              <div className="text-gray-700 space-y-2">
-                {adviceData.advice}
-              </div>
+              <div className="text-gray-700 space-y-2" dangerouslySetInnerHTML={{ __html: adviceData.advice }}></div>
+            </div>
+            <div className="p-6 rounded-lg bg-white shadow-sm border border-gray-100 mt-3">
+              <h3 className="text-lg font-semibold mb-3">Budget Summary</h3>
+              <div className="text-gray-700 space-y-2" dangerouslySetInnerHTML={{ __html: adviceData.budgetSummary }}></div>
             </div>
             
             {onDownloadSpreadsheet && (
               <Button 
                 onClick={onDownloadSpreadsheet}
+                disabled={loading}
                 className="w-full bg-budget-600 hover:bg-budget-700 text-white hover-lift flex items-center justify-center gap-2"
               >
-                <Download className="h-4 w-4" />
-                Download Budget Spreadsheet
+                {
+                  loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Download Budget Spreadsheet
+                    </>
+                  )
+                }
               </Button>
             )}
           </div>
