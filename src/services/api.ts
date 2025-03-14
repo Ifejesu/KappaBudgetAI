@@ -4,8 +4,8 @@ import { BudgetData, FinancialAdvice } from '@/types';
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
-// const API_BASE_URL = "https://kappa-financial-advice-system-backend.onrender.com";
+// const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = "https://kappa-financial-advice-system-backend.onrender.com";
 
 
 const fetchWithAuth = async (endpoint: string, options: RequestInit = {}, ) => {
