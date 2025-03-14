@@ -6,37 +6,24 @@ import BudgetForm from '@/components/BudgetForm';
 import SpreadsheetViewer from '@/components/SpreadsheetViewer';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useBudget } from '@/hooks/use-budget';
 
 const BudgetPage = () => {
   const [loading, setLoading] = useState(false);
-  const [adviceData, setAdviceData] = useState<any>(null);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
   const { toast } = useToast();
-
-  // Mocked financial advice text
-  const mockAdvice = `Based on your income of $5,000 and expenses, you're allocating 30% to housing which is within the recommended range. However, your entertainment expenses are slightly high at 6% of your income. Consider reducing this to 5% to increase your savings rate.
-
-I recommend setting up an emergency fund with 3-6 months of expenses if you haven't already. With your current saving rate, you could reach this goal in about 8 months.
-
-For your vacation savings goal, allocating $200-300 monthly would allow you to save $2,400-3,600 annually without straining your budget.
-
-For retirement, try to contribute at least 15% of your income, including any employer match. This will help ensure financial security in your later years.`;
+  const {downloadBudgetSpreadsheet, getBudgetAdvice, setAdvice, advice, downloadUrl, sheetData, setSheetData, setDownloadUrl} = useBudget();
+  const [prompt, setPrompt] = useState('');
 
   const handleSubmitBudget = async (budget: string, isVoice: boolean) => {
     setLoading(true);
     setShowSpreadsheet(false);
-    setAdviceData(null);
-
+    setAdvice(null);
+    setPrompt(budget);
+    setDownloadUrl('');
+    setSheetData([]);
     try {
-      // In a real app, this would be an API call to your backend
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock response
-      setAdviceData({
-        id: 'budget-123',
-        advice: mockAdvice
-      });
-      
+      await getBudgetAdvice(budget);
       toast({
         title: "Financial advice generated!",
         description: isVoice 
@@ -55,15 +42,25 @@ For retirement, try to contribute at least 15% of your income, including any emp
     }
   };
 
-  const handleDownloadSpreadsheet = () => {
+  const handleDownloadSpreadsheet = async () => {
     toast({
       title: "Downloading spreadsheet",
       description: "Your budget spreadsheet is being downloaded."
     });
-    
-    // In a real app, this would trigger a download
-    // For demo purposes, we'll just show the spreadsheet viewer
-    setShowSpreadsheet(true);
+    try{
+      setLoading(true);
+      await downloadBudgetSpreadsheet(prompt);
+      setShowSpreadsheet(true);
+    }catch(error){
+      console.error('Error downloading spreadsheet:', error);
+      toast({
+        title: "Failed to download spreadsheet",
+        description: "There was an error downloading the spreadsheet.",
+        variant: "destructive"
+      });
+    }finally{
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,14 +83,16 @@ For retirement, try to contribute at least 15% of your income, including any emp
                   <TabsTrigger value="advice">Financial Advice</TabsTrigger>
                 </TabsList>
                 <TabsContent value="spreadsheet">
-                  <SpreadsheetViewer data={adviceData} onDownload={handleDownloadSpreadsheet} />
+                  <SpreadsheetViewer data={sheetData} url={downloadUrl} />
                 </TabsContent>
                 <TabsContent value="advice">
                   <div className="p-6 rounded-lg bg-white shadow-sm border border-gray-100">
                     <h3 className="text-lg font-semibold mb-4">Your Financial Advice</h3>
-                    <div className="text-gray-700 space-y-3 whitespace-pre-line">
-                      {adviceData?.advice}
-                    </div>
+                    <div className="text-gray-700 space-y-3 whitespace-pre-line" dangerouslySetInnerHTML={{__html: advice?.advice}}></div>
+                  </div>
+                  <div className="p-6 rounded-lg bg-white shadow-sm border border-gray-100 mt-5">
+                    <h3 className="text-lg font-semibold mb-4">Your Budget Summary</h3>
+                    <div className="text-gray-700 space-y-3 whitespace-pre-line" dangerouslySetInnerHTML={{__html: advice?.budgetSummary}}></div>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -101,8 +100,8 @@ For retirement, try to contribute at least 15% of your income, including any emp
               <BudgetForm
                 onSubmit={handleSubmitBudget}
                 loading={loading}
-                adviceData={adviceData}
-                onDownloadSpreadsheet={adviceData ? handleDownloadSpreadsheet : undefined}
+                adviceData={advice}
+                onDownloadSpreadsheet={advice ? handleDownloadSpreadsheet : undefined}
               />
             )}
           </div>

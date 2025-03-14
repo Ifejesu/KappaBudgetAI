@@ -1,34 +1,80 @@
 
-// Mock API service for budgeting app
-
 import { BudgetData, FinancialAdvice } from '@/types';
 
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const api = {
-  // Budgeting endpoints
-  getBudgetAdvice: async (prompt: string): Promise<FinancialAdvice> => {
-    await delay(2000); // Simulate network delay
+// const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = "https://kappa-financial-advice-system-backend.onrender.com";
+
+
+const fetchWithAuth = async (endpoint: string, options: RequestInit = {}, ) => {
+  const token = localStorage.getItem('auth_token');
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    // ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(options.headers || {})
+  };
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers
+    });
     
-    // Mock response
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.message || `Request failed with status ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('API request failed:', error);
+    throw error;
+  }
+};
+
+
+export class API{
+
+  async getBudgetAdvice (message: string): Promise<FinancialAdvice> {
+    const response = await fetchWithAuth('/advice', {
+      method: 'POST',
+      body: JSON.stringify({ message })
+    })
+    
     return {
       id: `advice-${Date.now()}`,
       createdAt: new Date().toISOString(),
-      originalPrompt: prompt,
-      advice: `Based on your financial situation, here are my recommendations:
-
-1. Your housing costs are reasonable at 30% of your income.
-2. Consider reducing discretionary spending by 5-10% to increase your savings rate.
-3. Allocate at least 15% of your income towards retirement savings.
-4. Build an emergency fund covering 3-6 months of expenses.
-5. For your vacation goal, set aside $200-300 monthly in a separate savings account.
-
-These adjustments will help you maintain financial stability while working towards your goals.`
+      originalPrompt: message,
+      advice: response["Financial Advice"],
+      budgetSummary: response["Budget Summary"]
     };
-  },
+  }
+
+  async getBudgetSpreadsheetData (message: string): Promise<Blob> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/download-budget`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ message }),
+          headers: {'Content-Type': 'application/json'}
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || `Request failed with status ${response.status}`);
+      }
+      return await response.blob();
+      // return window.URL.createObjectURL(blob);
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
   
-  getSpreadsheetData: async (adviceId: string): Promise<BudgetData> => {
+  async getSpreadsheetData (adviceId: string): Promise<BudgetData> {
     await delay(1500); // Simulate network delay
     
     // Mock response
@@ -55,10 +101,10 @@ These adjustments will help you maintain financial stability while working towar
       totalSavings: 1500,
       netCashFlow: 0
     };
-  },
+  }
   
   // For authenticated users
-  getUserBudgets: async (): Promise<{ id: string, date: string, description: string }[]> => {
+  async getUserBudgets (): Promise<{ id: string, date: string, description: string }[]> {
     await delay(1000); // Simulate network delay
     
     // Mock response
@@ -79,10 +125,10 @@ These adjustments will help you maintain financial stability while working towar
         description: 'Emergency fund setup'
       }
     ];
-  },
+  }
   
   // Auth related mock endpoints
-  login: async (email: string, password: string): Promise<{ user: { id: string, name: string, email: string } }> => {
+  async login (email: string, password: string): Promise<{ user: { id: string, name: string, email: string } }> {
     await delay(1500); // Simulate network delay
     
     // In a real app, this would validate credentials
@@ -97,9 +143,9 @@ These adjustments will help you maintain financial stability while working towar
     }
     
     throw new Error('Invalid credentials');
-  },
+  }
   
-  register: async (name: string, email: string, password: string): Promise<{ user: { id: string, name: string, email: string } }> => {
+  async register (name: string, email: string, password: string): Promise<{ user: { id: string, name: string, email: string } }> {
     await delay(1500); // Simulate network delay
     
     // In a real app, this would create a new user
@@ -115,4 +161,4 @@ These adjustments will help you maintain financial stability while working towar
     
     throw new Error('Invalid registration details');
   }
-};
+}

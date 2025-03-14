@@ -25,6 +25,7 @@ export interface FinancialAdvice {
   createdAt: string;
   originalPrompt: string;
   advice: string;
+  budgetSummary: string;
   budgetId?: string;
 }
 

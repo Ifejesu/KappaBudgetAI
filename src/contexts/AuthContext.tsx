@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '@/services/api';
 import { User } from '@/types';
+import { API } from '@/services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -29,6 +29,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const api = new API();
 
   useEffect(() => {
     // Check for stored user in localStorage
